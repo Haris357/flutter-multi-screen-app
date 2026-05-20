@@ -1,16 +1,41 @@
 import 'package:flutter/material.dart';
 
 import '../controllers/auth_scope.dart';
+import '../controllers/course_controller.dart';
+import '../controllers/course_scope.dart';
 import '../controllers/navigation_controller.dart';
-import '../models/subject_model.dart';
+import '../models/course_model.dart';
 import '../models/user_model.dart';
+import 'course_detail_screen.dart';
+import 'course_form_screen.dart';
+import 'courses_screen.dart';
 
-/// Screen 3 — shows the signed-in user and their enrolled subjects.
-class DashboardScreen extends StatelessWidget {
+/// Screen 3 — shows the signed-in user and a preview of their courses,
+/// pulled live from the JSONPlaceholder API.
+class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key, required this.user});
 
   /// The authenticated user, passed in from the login screen.
   final UserModel user;
+
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  bool _initialLoadStarted = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_initialLoadStarted) {
+      _initialLoadStarted = true;
+      // Defer to after the first frame so listeners are attached first.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) CourseScope.of(context).loadCourses();
+      });
+    }
+  }
 
   Future<void> _logout(BuildContext context) async {
     final confirmed = await showDialog<bool>(
@@ -55,21 +80,9 @@ class DashboardScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          _UserHeader(user: user),
+          _UserHeader(user: widget.user),
           const SizedBox(height: 28),
-          Text(
-            'Your Subjects',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 12),
-          // Dynamic list of subjects — tapping one opens its detail page.
-          ...kSubjects.map(
-            (subject) => _SubjectCard(
-              subject: subject,
-              onTap: () =>
-                  NavigationController.toDetail(context, subject),
-            ),
-          ),
+          const _CoursesPreview(),
         ],
       ),
     );
@@ -126,32 +139,149 @@ class _UserHeader extends StatelessWidget {
   }
 }
 
-/// Tappable card representing a single subject in the list.
-class _SubjectCard extends StatelessWidget {
-  const _SubjectCard({required this.subject, required this.onTap});
+/// Compact "Your Courses" panel on the dashboard. Shows the first few items
+/// from the API plus quick-access buttons to the full CRUD screen.
+class _CoursesPreview extends StatelessWidget {
+  const _CoursesPreview();
 
-  final SubjectModel subject;
-  final VoidCallback onTap;
+  static const int _previewCount = 3;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: ListTile(
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: CircleAvatar(
-          backgroundColor: Colors.indigo.shade50,
-          child: const Icon(Icons.menu_book, color: Colors.indigo),
+    final controller = CourseScope.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Your Courses',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
+            TextButton.icon(
+              icon: const Icon(Icons.list_alt),
+              label: const Text('View all'),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const CoursesScreen()),
+              ),
+            ),
+          ],
         ),
-        title: Text(
-          subject.name,
-          style: const TextStyle(fontWeight: FontWeight.w600),
+        const SizedBox(height: 4),
+        Text(
+          'Live data from JSONPlaceholder',
+          style: Theme.of(context)
+              .textTheme
+              .bodySmall
+              ?.copyWith(color: Colors.grey),
         ),
-        subtitle: Text(subject.classTiming),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: onTap,
-      ),
+        const SizedBox(height: 12),
+        _buildBody(context, controller),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.add),
+                label: const Text('Add course'),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const CourseFormScreen(),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
+  }
+
+  Widget _buildBody(BuildContext context, CourseController controller) {
+    switch (controller.state) {
+      case CourseLoadState.idle:
+      case CourseLoadState.loading:
+        return const Padding(
+          padding: EdgeInsets.symmetric(vertical: 24),
+          child: Center(child: CircularProgressIndicator()),
+        );
+      case CourseLoadState.error:
+        return Card(
+          color: Colors.red.shade50,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.red),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    controller.errorMessage ?? 'Failed to load courses.',
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => controller.loadCourses(),
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+        );
+      case CourseLoadState.loaded:
+        final List<CourseModel> all = controller.courses;
+        if (all.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: Text('No courses yet. Add one to get started.'),
+          );
+        }
+        final preview = all.take(_previewCount).toList();
+        return Column(
+          children: preview
+              .map(
+                (c) => Card(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    leading: CircleAvatar(
+                      backgroundColor: Colors.indigo.shade50,
+                      child: Text(
+                        '${c.id ?? '?'}',
+                        style: const TextStyle(
+                          color: Colors.indigo,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    title: Text(
+                      c.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    subtitle: Text(
+                      c.description,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            CourseDetailScreen(courseId: c.id!),
+                      ),
+                    ),
+                  ),
+                ),
+              )
+              .toList(),
+        );
+    }
   }
 }

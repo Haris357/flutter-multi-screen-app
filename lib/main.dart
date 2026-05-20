@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'controllers/auth_controller.dart';
 import 'controllers/auth_scope.dart';
+import 'controllers/course_controller.dart';
+import 'controllers/course_scope.dart';
 import 'controllers/navigation_controller.dart';
 import 'enums/app_enums.dart';
 import 'screens/dashboard_screen.dart';
@@ -9,30 +11,44 @@ import 'screens/login_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(MultiScreenApp(controller: AuthController()));
+  runApp(
+    MultiScreenApp(
+      authController: AuthController(),
+      courseController: CourseController(),
+    ),
+  );
 }
 
-/// Application root. Owns the single [AuthController] and exposes it to
-/// the widget tree through [AuthScope].
+/// Application root. Owns the long-lived [AuthController] and
+/// [CourseController] and exposes them to the widget tree through
+/// [AuthScope] and [CourseScope].
 class MultiScreenApp extends StatelessWidget {
-  const MultiScreenApp({super.key, required this.controller});
+  const MultiScreenApp({
+    super.key,
+    required this.authController,
+    required this.courseController,
+  });
 
-  final AuthController controller;
+  final AuthController authController;
+  final CourseController courseController;
 
   @override
   Widget build(BuildContext context) {
     return AuthScope(
-      controller: controller,
-      child: MaterialApp(
-        title: 'Multi-Screen App',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          colorSchemeSeed: Colors.indigo,
-          useMaterial3: true,
+      controller: authController,
+      child: CourseScope(
+        controller: courseController,
+        child: MaterialApp(
+          title: 'Multi-Screen App',
+          debugShowCheckedModeBanner: false,
+          theme: ThemeData(
+            colorSchemeSeed: Colors.indigo,
+            useMaterial3: true,
+          ),
+          // The launch screen decides where the user lands.
+          home: const _StartupGate(),
+          onGenerateRoute: NavigationController.onGenerateRoute,
         ),
-        // The launch screen decides where the user lands.
-        home: const _StartupGate(),
-        onGenerateRoute: NavigationController.onGenerateRoute,
       ),
     );
   }

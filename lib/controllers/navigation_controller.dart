@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../models/subject_model.dart';
 import '../models/user_model.dart';
+import '../screens/courses_screen.dart';
 import '../screens/dashboard_screen.dart';
-import '../screens/detail_screen.dart';
 import '../screens/login_screen.dart';
 import '../screens/registration_screen.dart';
 
@@ -15,7 +14,7 @@ class NavigationController {
   static const String registration = '/register';
   static const String login = '/login';
   static const String dashboard = '/dashboard';
-  static const String detail = '/detail';
+  static const String courses = '/courses';
 
   /// Route generator wired into [MaterialApp.onGenerateRoute].
   static Route<dynamic> onGenerateRoute(RouteSettings settings) {
@@ -27,9 +26,8 @@ class NavigationController {
       case dashboard:
         final user = settings.arguments as UserModel;
         return _build(DashboardScreen(user: user), settings);
-      case detail:
-        final subject = settings.arguments as SubjectModel;
-        return _build(DetailScreen(subject: subject), settings);
+      case courses:
+        return _build(const CoursesScreen(), settings);
       default:
         return _build(const LoginScreen(), settings);
     }
@@ -52,9 +50,9 @@ class NavigationController {
   static void toDashboard(BuildContext context, UserModel user) =>
       Navigator.pushReplacementNamed(context, dashboard, arguments: user);
 
-  /// Open a subject's detail screen, passing the selected subject.
-  static void toDetail(BuildContext context, SubjectModel subject) =>
-      Navigator.pushNamed(context, detail, arguments: subject);
+  /// Open the API-backed courses list from the dashboard.
+  static void toCourses(BuildContext context) =>
+      Navigator.pushNamed(context, courses);
 
   /// Logout: clear the stack and return to login.
   static void toLoginAndClearStack(BuildContext context) =>

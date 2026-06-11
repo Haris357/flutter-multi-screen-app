@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import '../controllers/auth_scope.dart';
+import '../controllers/auth_controller.dart';
 import '../controllers/navigation_controller.dart';
 import '../enums/app_enums.dart';
 import '../models/user_model.dart';
@@ -87,7 +88,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate() || _gender == null) return;
 
-    final auth = AuthScope.of(context);
+    final auth = context.read<AuthController>();
     final result = await auth.register(
       UserModel(
         firstName: _firstName.text.trim(),
@@ -115,7 +116,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final auth = AuthScope.of(context);
+    final auth = context.watch<AuthController>();
     final isBusy = auth.state == AuthState.authenticating;
 
     return Scaffold(

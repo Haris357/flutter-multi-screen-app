@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import '../controllers/course_scope.dart';
+import '../controllers/course_controller.dart';
 import '../models/course_model.dart';
 import '../services/course_api_service.dart';
 import 'course_form_screen.dart';
 
 /// Detail view for a single course.
 ///
-/// Looks up the course in [CourseController] by id and rebuilds when the
-/// underlying list changes (e.g. after an edit). Falls back to fetching from
-/// the API if the course isn't in the local list.
+/// Looks up the course in the [CourseController] by id and rebuilds when
+/// the underlying list changes (e.g. after an optimistic edit). Falls back
+/// to fetching from the API if the course isn't in the cached list.
 class CourseDetailScreen extends StatefulWidget {
   const CourseDetailScreen({super.key, required this.courseId});
 
@@ -32,7 +33,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final controller = CourseScope.of(context);
+    final controller = context.watch<CourseController>();
     final cached = controller.courseById(widget.courseId);
 
     return Scaffold(

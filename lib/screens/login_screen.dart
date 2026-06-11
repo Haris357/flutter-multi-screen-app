@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import '../controllers/auth_scope.dart';
+import '../controllers/auth_controller.dart';
 import '../controllers/navigation_controller.dart';
 import '../enums/app_enums.dart';
 import '../validators/validators.dart';
@@ -33,7 +34,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final auth = AuthScope.of(context);
+    final auth = context.read<AuthController>();
     final result = await auth.login(
       email: _email.text.trim(),
       password: _password.text,
@@ -56,7 +57,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final auth = AuthScope.of(context);
+    final auth = context.watch<AuthController>();
     final isBusy = auth.state == AuthState.authenticating;
 
     return Scaffold(

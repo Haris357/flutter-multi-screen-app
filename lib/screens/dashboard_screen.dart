@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import '../controllers/auth_scope.dart';
+import '../controllers/auth_controller.dart';
 import '../controllers/course_controller.dart';
-import '../controllers/course_scope.dart';
 import '../controllers/navigation_controller.dart';
 import '../models/course_model.dart';
 import '../models/user_model.dart';
@@ -11,7 +11,7 @@ import 'course_form_screen.dart';
 import 'courses_screen.dart';
 
 /// Screen 3 — shows the signed-in user and a preview of their courses,
-/// pulled live from the JSONPlaceholder API.
+/// pulled live from the JSONPlaceholder API (with offline cache fallback).
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key, required this.user});
 
@@ -30,9 +30,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.didChangeDependencies();
     if (!_initialLoadStarted) {
       _initialLoadStarted = true;
-      // Defer to after the first frame so listeners are attached first.
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) CourseScope.of(context).loadCourses();
+        if (mounted) context.read<CourseController>().loadCourses();
       });
     }
   }
@@ -58,7 +57,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     if (confirmed != true || !context.mounted) return;
 
-    await AuthScope.of(context).logout();
+    await context.read<AuthController>().logout();
     if (context.mounted) {
       NavigationController.toLoginAndClearStack(context);
     }
@@ -89,7 +88,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
-/// User information panel: avatar placeholder, name and email.
 class _UserHeader extends StatelessWidget {
   const _UserHeader({required this.user});
 
@@ -140,7 +138,7 @@ class _UserHeader extends StatelessWidget {
 }
 
 /// Compact "Your Courses" panel on the dashboard. Shows the first few items
-/// from the API plus quick-access buttons to the full CRUD screen.
+/// from the API + cache plus quick-access buttons to the full CRUD screen.
 class _CoursesPreview extends StatelessWidget {
   const _CoursesPreview();
 
@@ -148,7 +146,7 @@ class _CoursesPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final controller = CourseScope.of(context);
+    final controller = context.watch<CourseController>();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -172,11 +170,12 @@ class _CoursesPreview extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          'Live data from JSONPlaceholder',
-          style: Theme.of(context)
-              .textTheme
-              .bodySmall
-              ?.copyWith(color: Colors.grey),
+          controller.isOffline
+              ? 'Offline — showing cached courses'
+              : 'Live data from JSONPlaceholder',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: controller.isOffline ? Colors.orange : Colors.grey,
+              ),
         ),
         const SizedBox(height: 12),
         _buildBody(context, controller),

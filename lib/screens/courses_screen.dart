@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../controllers/course_controller.dart';
-import '../controllers/course_scope.dart';
 import '../models/course_model.dart';
 import 'course_detail_screen.dart';
 import 'course_form_screen.dart';
 
-/// Lists all courses fetched from the API with create / edit / delete actions.
-///
-/// Wired to [CourseController] via [CourseScope]; rebuilds automatically as
-/// load state and the course list change.
+/// Lists all courses surfaced by [CourseController] (network with cache
+/// fallback). Includes pull-to-refresh, in-list search, add/edit/delete
+/// actions with confirmation, and an offline banner when the cache is in
+/// use.
 class CoursesScreen extends StatefulWidget {
   const CoursesScreen({super.key});
 
@@ -19,20 +19,27 @@ class CoursesScreen extends StatefulWidget {
 
 class _CoursesScreenState extends State<CoursesScreen> {
   bool _initialLoadStarted = false;
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (!_initialLoadStarted) {
       _initialLoadStarted = true;
-      // Defer to after the first frame so listeners are attached first.
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) CourseScope.of(context).loadCourses();
+        if (mounted) context.read<CourseController>().loadCourses();
       });
     }
   }
 
-  Future<void> _refresh() => CourseScope.of(context).loadCourses();
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _refresh() => context.read<CourseController>().loadCourses();
 
   Future<void> _openCreate() async {
     final created = await Navigator.of(context).push<bool>(
@@ -87,8 +94,9 @@ class _CoursesScreenState extends State<CoursesScreen> {
 
     if (confirmed != true || !mounted) return;
 
+    // Optimistic delete — UI updates immediately and rolls back on failure.
     final error =
-        await CourseScope.of(context).deleteCourse(course.id!);
+        await context.read<CourseController>().deleteCourse(course.id!);
     if (!mounted) return;
     _snack(error ?? 'Course deleted.');
   }
@@ -99,9 +107,19 @@ class _CoursesScreenState extends State<CoursesScreen> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
+  List<CourseModel> _filter(List<CourseModel> courses) {
+    final q = _searchQuery.trim().toLowerCase();
+    if (q.isEmpty) return courses;
+    return courses
+        .where((c) =>
+            c.title.toLowerCase().contains(q) ||
+            c.description.toLowerCase().contains(q))
+        .toList(growable: false);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final controller = CourseScope.of(context);
+    final controller = context.watch<CourseController>();
 
     return Scaffold(
       appBar: AppBar(
@@ -115,13 +133,48 @@ class _CoursesScreenState extends State<CoursesScreen> {
                 : _refresh,
           ),
         ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(64),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: TextField(
+              controller: _searchController,
+              onChanged: (v) => setState(() => _searchQuery = v),
+              decoration: InputDecoration(
+                hintText: 'Search by title or description…',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _searchQuery.isEmpty
+                    ? null
+                    : IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                      ),
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+          ),
+        ),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openCreate,
         icon: const Icon(Icons.add),
         label: const Text('Add course'),
       ),
-      body: _buildBody(controller),
+      body: Column(
+        children: [
+          if (controller.isOffline) const _OfflineBanner(),
+          Expanded(child: _buildBody(controller)),
+        ],
+      ),
     );
   }
 
@@ -136,26 +189,72 @@ class _CoursesScreenState extends State<CoursesScreen> {
           onRetry: _refresh,
         );
       case CourseLoadState.loaded:
-        final courses = controller.courses;
-        if (courses.isEmpty) {
-          return const Center(
-            child: Text('No courses yet. Tap "Add course" to create one.'),
+        final filtered = _filter(controller.courses);
+        if (filtered.isEmpty) {
+          return RefreshIndicator(
+            onRefresh: _refresh,
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: [
+                const SizedBox(height: 120),
+                Icon(
+                  controller.courses.isEmpty
+                      ? Icons.menu_book_outlined
+                      : Icons.search_off,
+                  size: 64,
+                  color: Colors.grey,
+                ),
+                const SizedBox(height: 12),
+                Center(
+                  child: Text(
+                    controller.courses.isEmpty
+                        ? 'No courses yet. Tap "Add course" to create one.'
+                        : 'No courses match "$_searchQuery".',
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ],
+            ),
           );
         }
         return RefreshIndicator(
           onRefresh: _refresh,
           child: ListView.builder(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-            itemCount: courses.length,
+            itemCount: filtered.length,
             itemBuilder: (_, i) => _CourseCard(
-              course: courses[i],
-              onTap: () => _openDetail(courses[i]),
-              onEdit: () => _openEdit(courses[i]),
-              onDelete: () => _confirmDelete(courses[i]),
+              course: filtered[i],
+              onTap: () => _openDetail(filtered[i]),
+              onEdit: () => _openEdit(filtered[i]),
+              onDelete: () => _confirmDelete(filtered[i]),
             ),
           ),
         );
     }
+  }
+}
+
+class _OfflineBanner extends StatelessWidget {
+  const _OfflineBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      color: Colors.orange.shade100,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: [
+          const Icon(Icons.cloud_off, size: 18, color: Colors.orange),
+          const SizedBox(width: 8),
+          const Expanded(
+            child: Text(
+              'You are offline. Showing locally cached courses.',
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

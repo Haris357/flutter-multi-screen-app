@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import '../controllers/course_scope.dart';
+import '../controllers/course_controller.dart';
 import '../models/course_model.dart';
 import '../widgets/app_text_field.dart';
 import '../widgets/primary_button.dart';
@@ -58,7 +59,7 @@ class _CourseFormScreenState extends State<CourseFormScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _submitting = true);
-    final controller = CourseScope.of(context);
+    final controller = context.read<CourseController>();
     final title = _titleController.text.trim();
     final description = _descriptionController.text.trim();
 

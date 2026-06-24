@@ -145,11 +145,9 @@ the API or the local store does not require touching any UI code.
 |-------------------|---------------|
 | ![Course form](screenshots/CourseForm.png) | ![Course detail](screenshots/CourseDetail.png) |
 
-> The CRUD screenshots come from the earlier
-> `feature/course-api-integration` branch and remain accurate. New
-> screenshots showing the **offline banner** and **search bar** can be
-> dropped in as e.g. `screenshots/CoursesOffline.png` and
-> `screenshots/CoursesSearch.png` and linked from this README.
+| Offline banner (Hive cache) | Search / filter |
+|-----------------------------|-----------------|
+| ![Offline banner](screenshots/CoursesOffline.png) | ![Search filter](screenshots/CoursesSearch.png) |
 
 ## Features
 
